@@ -1,7 +1,7 @@
 using UnityEngine;
 
 [RequireComponent (typeof (Rigidbody))]
-public class Missile : MonoBehaviour
+public class Missile : Target
 {
     public string designation = "Fox Two Missile";
     public MissileType type = MissileType.FoxTwo;
@@ -9,12 +9,12 @@ public class Missile : MonoBehaviour
     public Transform target;
 
     new Rigidbody rigidbody;
-    bool isFired = true;
+    bool isFired = false;
 
     [Header("Physics")]
     public float mass = 100;
     public float thrust;
-    public float dragArea = .1f;
+    public Vector3 dragArea = new Vector3(5, 5, 1);
     public float wingArea = 1;
 
     [Header("Timeings")]
@@ -22,7 +22,9 @@ public class Missile : MonoBehaviour
     public float thrustTime = 5;
     public float noTargetTime = 5;
 
-    void Start() {
+    public override void Start() {
+        base.Start();
+
         rigidbody = GetComponent<Rigidbody>();
         /*if (transform.root == transform) {
             rigidbody.constraints = RigidbodyConstraints.FreezeAll;
@@ -34,21 +36,17 @@ public class Missile : MonoBehaviour
         Rigidbody r = transform.root.GetComponent<Rigidbody>();
 
         Vector3 relativeVelocity = transform.InverseTransformDirection(r.velocity);
-        Vector3 aeroForce = new Vector3(
-            ((relativeVelocity.x * relativeVelocity.x * -1)/2) * wingArea/2,
-            ((relativeVelocity.y * relativeVelocity.y * -1)/2) * wingArea/2,
-            ((relativeVelocity.z * relativeVelocity.z * -1)/2) * dragArea
-        );
+        Vector3 aeroForce = Library.GetForce(relativeVelocity, dragArea, new Vector3(1, 1, .2f));
         Vector3 thrustForce = new Vector3(0, 0, (isFired) ? thrust : 0);
 
-        r.AddForce(transform.TransformDirection(aeroForce + thrustForce));
+        r.AddRelativeForce(aeroForce + thrustForce);
 
         TrackTarget();
     }
 
     #region Class Region
 
-    public void Fire() {
+    public void Fire(float intitalVelocity) {
         transform.SetParent(transform);
         rigidbody.constraints  = RigidbodyConstraints.None;
         isFired = true;

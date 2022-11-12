@@ -1,12 +1,18 @@
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 [RequireComponent (typeof (Rigidbody))]
-public class Aircraft : MonoBehaviour
+public class Aircraft : Target
 {
+    public Controller pilot { get; private set; }
+    [Header("")]
     public string designation = "Fighter";
 
-    new Rigidbody rigidbody;
+    new public Rigidbody rigidbody { get; private set; }
     private static Vector3 aerofoil = new Vector3(1, 36, .5f);
+
+    public Rail[] rails = new Rail[6];
 
     [Header("Physics"), Tooltip("-in tonne(s)")]
     public float mass = 11;
@@ -39,23 +45,30 @@ public class Aircraft : MonoBehaviour
     public Vector3 rudderArea = new Vector3(1, 0, 0);
 
     // inputs
-    [Header("Inputs")]
-    /*[HideInInspector]*/ public float gas;
-    /*[HideInInspector]*/ public float pitch;
-    /*[HideInInspector]*/ public float yaw;
-    /*[HideInInspector]*/ public float roll;
-    /*[HideInInspector]*/ public bool fire;
+    [HideInInspector] public float gas;
+    [HideInInspector] public float pitch;
+    [HideInInspector] public float yaw;
+    [HideInInspector] public float roll;
+    [HideInInspector] public bool fire;
 
-    void Start() {
+    public override void Start() {
+        base.Start();
+        weaponTrigger = true;
+
         rigidbody = GetComponent<Rigidbody>();
         rigidbody.centerOfMass = centerOfMass.localPosition;
         rigidbody.useGravity = false;
         rigidbody.mass = mass * 1000; // local mass is in tonnes
 
         WheelForce(wheelTorque, 0);
+
+        StartCoroutine(Radar());
     }
 
     void Update() {
+        // clear old radar signatures
+        RadarUpdate();
+
         // rotate control surfaces
         engineNozzle.localEulerAngles = new Vector3(fightAngle, 0, 0);
 
@@ -72,17 +85,17 @@ public class Aircraft : MonoBehaviour
     void FixedUpdate() {
         WheelForce(wheelTorque * gas, 0);
 
-        Vector3 drag = GetForce(transform.InverseTransformDirection(rigidbody.velocity), dragArea, dragCoeffitient);
-        Vector3 lift = GetForce(transform.InverseTransformDirection(rigidbody.velocity), wingArea, aerofoil);
+        Vector3 drag = Library.GetForce(transform.InverseTransformDirection(rigidbody.velocity), dragArea, dragCoeffitient);
+        Vector3 lift = Library.GetForce(transform.InverseTransformDirection(rigidbody.velocity), wingArea, aerofoil);
         Vector3 gravity = transform.InverseTransformDirection(new Vector3(0, -9.81f * mass * 1000, 0));
 
-        float rightVertStableTorque = (rightVertStable.localPosition.z - centerOfMass.localPosition.z) * GetForce(rightVertStable.InverseTransformDirection(rigidbody.velocity), vertStableArea, aerofoil).y;
-        float leftVertStableTorque = (leftVertStable.localPosition.z - centerOfMass.localPosition.z) * GetForce(leftVertStable.InverseTransformDirection(rigidbody.velocity), vertStableArea, aerofoil).y;
-        float rudderTorque = rudder.localPosition.z * GetForce(rudder.InverseTransformDirection(rigidbody.velocity), rudderArea, aerofoil).x * -1;
-        float rightAileronTorque = rightAileron.localPosition.x * GetForce(rightAileron.InverseTransformDirection(rigidbody.velocity), aileronArea, aerofoil).y * -1;
-        float leftAileronTorque = leftAileron.localPosition.x * GetForce(leftAileron.InverseTransformDirection(rigidbody.velocity), aileronArea, aerofoil).y * -1;
+        float rightVertStableTorque = (rightVertStable.localPosition.z - centerOfMass.localPosition.z) * Library.GetForce(rightVertStable.InverseTransformDirection(rigidbody.velocity), vertStableArea, aerofoil).y;
+        float leftVertStableTorque = (leftVertStable.localPosition.z - centerOfMass.localPosition.z) * Library.GetForce(leftVertStable.InverseTransformDirection(rigidbody.velocity), vertStableArea, aerofoil).y;
+        float rudderTorque = rudder.localPosition.z * Library.GetForce(rudder.InverseTransformDirection(rigidbody.velocity), rudderArea, aerofoil).x * -1;
+        float rightAileronTorque = rightAileron.localPosition.x * Library.GetForce(rightAileron.InverseTransformDirection(rigidbody.velocity), aileronArea, aerofoil).y * -1;
+        float leftAileronTorque = leftAileron.localPosition.x * Library.GetForce(leftAileron.InverseTransformDirection(rigidbody.velocity), aileronArea, aerofoil).y * -1;
 
-        float horStableTorque = horStable.localPosition.z * GetForce(horStable.InverseTransformDirection(rigidbody.velocity), horStableArea, aerofoil).x * -1;
+        float horStableTorque = horStable.localPosition.z * Library.GetForce(horStable.InverseTransformDirection(rigidbody.velocity), horStableArea, aerofoil).x * -1;
         
 
         Vector3 centerForce = drag + lift + gravity + (Vector3.forward * thrust * 1000 * gas);
@@ -94,13 +107,8 @@ public class Aircraft : MonoBehaviour
 
     #region Class Methods
 
-    Vector3 GetForce(Vector3 relativeVelocity, Vector3 area, Vector3 coeffitients) { //L=Ci * ((r * V^2)/2) * A
-        Vector3 forceVectors = new Vector3(
-            coeffitients.x * ((relativeVelocity.x * relativeVelocity.x * ((relativeVelocity.x>0)?-1:1))/2) * area.x,
-            coeffitients.y * ((relativeVelocity.y * relativeVelocity.y * ((relativeVelocity.y>0)?-1:1))/2) * area.y,
-            coeffitients.z * ((relativeVelocity.z * relativeVelocity.z * ((relativeVelocity.z>0)?-1:1))/2) * area.z
-        );
-        return forceVectors;
+    public void SetPilot(Controller _pilot = null) {
+        pilot = _pilot;
     }
     void WheelForce(float torque, float brake) {
         if (steerWheel != null) {
